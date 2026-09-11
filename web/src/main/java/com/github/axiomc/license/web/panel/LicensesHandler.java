@@ -23,6 +23,7 @@ public final class LicensesHandler implements HttpHandler {
     public static final String PATH = "/licenses";
 
     private static final int MAX_FIELD = 64;
+    private static final int MAX_YEAR = 9999;
 
     private final LicenseRepository licenses;
 
@@ -33,16 +34,15 @@ public final class LicensesHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         if (Http.isPost(exchange)) {
-            act(exchange, Forms.read(exchange));
+            act(exchange, SecurityFilter.account().role() == Role.ADMIN, Forms.read(exchange));
             return;
         }
         List<License> all = licenses.findAll().join();
-        Http.html(exchange, 200, Pages.licenses(SecurityFilter.account(exchange), all, Http.query(exchange, "notice"), Http.query(exchange, "issued")));
+        Http.html(exchange, 200, Pages.licenses(SecurityFilter.account(), all, Http.query(exchange, "notice"), Http.query(exchange, "issued")));
     }
 
-    private void act(HttpExchange exchange, Forms form) throws IOException {
+    private void act(HttpExchange exchange, boolean admin, Forms form) throws IOException {
         long id = form.id("id");
-        boolean admin = SecurityFilter.account(exchange).role() == Role.ADMIN;
         CompletableFuture<String> outcome = switch (form.text("action")) {
             case "issue" -> issue(form);
             case "revoke" -> licenses.setStatus(id, LicenseStatus.REVOKED).thenApply(v -> "revoked");
@@ -63,7 +63,11 @@ public final class LicensesHandler implements HttpHandler {
         Instant expiresAt;
         try {
             String expires = form.text("expires");
-            expiresAt = expires.isEmpty() ? null : LocalDate.parse(expires).plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+            LocalDate date = expires.isEmpty() ? null : LocalDate.parse(expires);
+            if (date != null && date.getYear() > MAX_YEAR) {
+                return CompletableFuture.completedFuture("invalid");
+            }
+            expiresAt = date == null ? null : date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         } catch (DateTimeParseException e) {
             return CompletableFuture.completedFuture("invalid");
         }

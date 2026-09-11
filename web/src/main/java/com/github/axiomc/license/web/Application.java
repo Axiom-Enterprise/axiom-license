@@ -21,7 +21,10 @@ import com.sun.net.httpserver.HttpContext;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,7 +49,7 @@ public final class Application {
         AccountRepository accounts = new AccountRepository(database);
         SessionRegistry sessions = new SessionRegistry();
         LoginThrottle throttle = new LoginThrottle();
-        bootstrapAdmin(accounts);
+        bootstrapAdmin(accounts, data);
 
         HttpServer server = HttpServer.create(new InetSocketAddress(bind, port), 256);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
@@ -75,7 +78,7 @@ public final class Application {
         context.getFilters().add(new SecurityFilter(sessions, required));
     }
 
-    private static void bootstrapAdmin(AccountRepository accounts) {
+    private static void bootstrapAdmin(AccountRepository accounts, Path data) throws IOException {
         if (accounts.count().join() > 0) {
             return;
         }
@@ -83,7 +86,8 @@ public final class Application {
         new SecureRandom().nextBytes(secret);
         String password = Base64.getUrlEncoder().withoutPadding().encodeToString(secret);
         accounts.insert("admin", PasswordHasher.hash(password.toCharArray()), Role.ADMIN, Instant.now()).join();
-        LOG.log(System.Logger.Level.WARNING, "first start: account admin created with password {0}; change it after signing in", password);
+        Path file = Files.writeString(Files.createFile(data.resolve("admin-password"), PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))), password);
+        LOG.log(System.Logger.Level.WARNING, "first start: account admin created; its password is in {0}, change it after signing in and delete the file", file.toAbsolutePath());
     }
 
     private static String env(String name, String fallback) {

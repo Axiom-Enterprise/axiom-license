@@ -13,11 +13,15 @@ import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.Semaphore;
 
 public final class LoginHandler implements HttpHandler {
 
     public static final String LOGIN = "/login";
     public static final String LOGOUT = "/logout";
+
+    private static final String TOO_MANY = "Too many attempts. Try again in fifteen minutes.";
+    private static final Semaphore HASHING = new Semaphore(Runtime.getRuntime().availableProcessors());
 
     private final AccountRepository accounts;
     private final SessionRegistry sessions;
@@ -36,7 +40,7 @@ public final class LoginHandler implements HttpHandler {
             case LOGIN -> {
                 if (Http.isPost(exchange)) {
                     login(exchange);
-                } else if (SecurityFilter.account(exchange) != null) {
+                } else if (SecurityFilter.account() != null) {
                     Http.redirect(exchange, LicensesHandler.PATH);
                 } else {
                     Http.html(exchange, 200, Pages.login(null));
@@ -48,25 +52,34 @@ public final class LoginHandler implements HttpHandler {
 
     private void login(HttpExchange exchange) throws IOException {
         String address = Http.clientAddress(exchange);
-        if (throttle.blocked(address)) {
-            Http.html(exchange, 429, Pages.login("Too many attempts. Try again in fifteen minutes."));
-            return;
-        }
         Forms form = Forms.read(exchange);
         String username = form.text("username").toLowerCase();
-        char[] password = form.text("password").toCharArray();
-        Optional<AccountRepository.Credentials> found = accounts.findByUsername(username).join();
-        boolean ok = PasswordHasher.verify(password, found.map(AccountRepository.Credentials::passwordHash).orElse(null));
-        Arrays.fill(password, '\0');
+        if (throttle.blocked(address, username)) {
+            Http.html(exchange, 429, Pages.login(TOO_MANY));
+            return;
+        }
+        throttle.attempt(address, username);
+        if (!HASHING.tryAcquire()) {
+            Http.html(exchange, 503, Pages.login("The server is busy. Try again in a moment."));
+            return;
+        }
+        Optional<AccountRepository.Credentials> found;
+        boolean ok;
+        try {
+            char[] password = form.text("password").toCharArray();
+            found = accounts.findByUsername(username).join();
+            ok = PasswordHasher.verify(password, found.map(AccountRepository.Credentials::passwordHash).orElse(null));
+            Arrays.fill(password, '\0');
+        } finally {
+            HASHING.release();
+        }
         if (!ok) {
-            throttle.failed(address);
             Http.html(exchange, 401, Pages.login("Wrong username or password."));
             return;
         }
-        throttle.succeeded(address);
+        throttle.succeeded(address, username);
         Account account = found.get().account();
-        String token = sessions.open(account);
-        exchange.getResponseHeaders().add("Set-Cookie", cookie(exchange, token, SessionRegistry.LIFETIME_SECONDS));
+        exchange.getResponseHeaders().add("Set-Cookie", cookie(exchange, sessions.open(account), SessionRegistry.LIFETIME_SECONDS));
         Http.redirect(exchange, LicensesHandler.PATH);
     }
 
@@ -81,7 +94,8 @@ public final class LoginHandler implements HttpHandler {
     }
 
     private static String cookie(HttpExchange exchange, String value, long maxAge) {
-        boolean secure = "https".equals(exchange.getRequestHeaders().getFirst("X-Forwarded-Proto"));
-        return SessionRegistry.COOKIE + '=' + value + "; Path=/; Max-Age=" + maxAge + "; HttpOnly; SameSite=Strict" + (secure ? "; Secure" : "");
+        String host = exchange.getRequestHeaders().getFirst("Host");
+        boolean loopback = host != null && (host.startsWith("127.0.0.1") || host.startsWith("localhost"));
+        return SessionRegistry.COOKIE + '=' + value + "; Path=/; Max-Age=" + maxAge + "; HttpOnly; SameSite=Strict" + (loopback ? "" : "; Secure");
     }
 }

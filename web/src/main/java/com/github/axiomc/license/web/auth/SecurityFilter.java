@@ -10,9 +10,9 @@ import java.util.Optional;
 
 public final class SecurityFilter extends Filter {
 
-    public static final String ACCOUNT = "account";
-
     private static final String CSP = "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+    private static final ThreadLocal<Account> CURRENT = new ThreadLocal<>();
+    private static final System.Logger LOG = System.getLogger(SecurityFilter.class.getName());
 
     private final SessionRegistry sessions;
     private final Role required;
@@ -30,9 +30,6 @@ public final class SecurityFilter extends Filter {
             return;
         }
         Optional<Account> account = sessions.resolve(cookie(exchange));
-        if (account.isPresent()) {
-            exchange.setAttribute(ACCOUNT, account.get());
-        }
         if (required != null) {
             if (account.isEmpty()) {
                 Http.redirect(exchange, "/login");
@@ -43,7 +40,15 @@ public final class SecurityFilter extends Filter {
                 return;
             }
         }
-        chain.doFilter(exchange);
+        CURRENT.set(account.orElse(null));
+        try {
+            chain.doFilter(exchange);
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "rejected {0} {1}: {2}", exchange.getRequestMethod(), exchange.getRequestURI().getPath(), e.toString());
+            Http.empty(exchange, 400);
+        } finally {
+            CURRENT.remove();
+        }
     }
 
     @Override
@@ -51,8 +56,8 @@ public final class SecurityFilter extends Filter {
         return required == null ? "public" : "requires " + required;
     }
 
-    public static Account account(HttpExchange exchange) {
-        return (Account) exchange.getAttribute(ACCOUNT);
+    public static Account account() {
+        return CURRENT.get();
     }
 
     public static String cookie(HttpExchange exchange) {

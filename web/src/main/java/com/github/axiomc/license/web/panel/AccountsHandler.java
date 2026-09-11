@@ -32,7 +32,7 @@ public final class AccountsHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        Account self = SecurityFilter.account(exchange);
+        Account self = SecurityFilter.account();
         if (Http.isPost(exchange)) {
             act(exchange, self, Forms.read(exchange));
             return;

@@ -24,6 +24,6 @@ public final class IntegrationHandler implements HttpHandler {
         String proto = exchange.getRequestHeaders().getFirst("X-Forwarded-Proto");
         String host = exchange.getRequestHeaders().getFirst("Host");
         String base = (proto == null ? "http" : proto) + "://" + host;
-        Http.html(exchange, 200, Pages.integration(SecurityFilter.account(exchange), base, LicenseEndpoint.PATH, keys.exchangePublicBase64(), keys.signingPublicBase64()));
+        Http.html(exchange, 200, Pages.integration(SecurityFilter.account(), base, LicenseEndpoint.PATH, keys.exchangePublicBase64(), keys.signingPublicBase64()));
     }
 }

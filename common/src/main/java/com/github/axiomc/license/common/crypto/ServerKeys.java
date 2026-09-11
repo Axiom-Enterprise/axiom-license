@@ -61,9 +61,8 @@ public record ServerKeys(KeyPair exchange, KeyPair signing) {
     }
 
     private static void write(Path directory, String name, KeyPair pair) throws IOException {
-        Path privateFile = directory.resolve(name + ".key");
+        Path privateFile = Files.createFile(directory.resolve(name + ".key"), PosixFilePermissions.asFileAttribute(OWNER_ONLY));
         Files.write(privateFile, pair.getPrivate().getEncoded());
-        Files.setPosixFilePermissions(privateFile, OWNER_ONLY);
         Files.write(directory.resolve(name + ".pub"), pair.getPublic().getEncoded());
     }
 }

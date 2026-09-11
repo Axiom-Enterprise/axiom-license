@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 public final class LicenseService {
 
     static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
+    private static final Duration TOUCH_INTERVAL = Duration.ofMinutes(1);
 
     private final LicenseRepository licenses;
     private final Clock clock;
@@ -42,7 +43,9 @@ public final class LicenseService {
             return CompletableFuture.completedFuture(response(verdict, request, now, null));
         }
         if (license.hardwareId() != null) {
-            licenses.touch(license.id(), now);
+            if (license.lastSeenAt() == null || Duration.between(license.lastSeenAt(), now).compareTo(TOUCH_INTERVAL) >= 0) {
+                licenses.touch(license.id(), now);
+            }
             return CompletableFuture.completedFuture(response(LicenseVerdict.VALID, request, now, license));
         }
         return licenses.bindHardware(license.id(), request.hardwareId(), now).thenApply(ok -> response(ok ? LicenseVerdict.VALID : LicenseVerdict.HARDWARE_MISMATCH, request, now, license));

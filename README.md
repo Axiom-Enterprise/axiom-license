@@ -14,7 +14,7 @@ Licence server and admin panel. Java 21, no framework, SQLite, encrypted verify 
 web/build/install/web/bin/web
 ```
 
-First start creates the account `admin` and prints its password once. Change it from Accounts.
+First start creates the account `admin` and writes its password to `data/admin-password` (owner-only). Sign in, change it from Accounts, delete the file.
 
 | Variable     | Default     | Meaning                    |
 |--------------|-------------|----------------------------|
