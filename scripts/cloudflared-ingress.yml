@@ -1,0 +1,8 @@
+# Add to the ingress list of the tunnel's config.yml, before the final http_status:404 rule.
+  - hostname: license.axiomc.net
+    service: http://127.0.0.1:8220
+  - hostname: api-license.axiomc.net
+    path: ^/v1/
+    service: http://127.0.0.1:8220
+  - hostname: api-license.axiomc.net
+    service: http_status:404

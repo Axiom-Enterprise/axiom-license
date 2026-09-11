@@ -1,0 +1,22 @@
+[Unit]
+Description=Axiom licence server
+After=network.target
+
+[Service]
+User=axiom
+Group=axiom
+WorkingDirectory=/opt/axiom-license
+Environment=AXIOM_BIND=127.0.0.1
+Environment=AXIOM_PORT=8220
+Environment=AXIOM_DATA=/opt/axiom-license/data
+ExecStart=/opt/axiom-license/web/bin/web
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/axiom-license/data
+
+[Install]
+WantedBy=multi-user.target

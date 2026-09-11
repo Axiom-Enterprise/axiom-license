@@ -54,3 +54,22 @@ A key binds to the first hardware id it sees; Unbind in the panel releases it.
 ```sh
 ./gradlew test
 ```
+
+## Production
+
+Runs on the dedicated server behind the existing `axiom-dedi-167` tunnel.
+
+| Host                     | Serves                        |
+|--------------------------|-------------------------------|
+| `license.axiomc.net`     | admin panel                   |
+| `api-license.axiomc.net` | `/v1/license/verify` only     |
+
+Layout on the server: `/opt/axiom-license/web` (distribution), `/opt/axiom-license/data` (database, keys), unit `scripts/axiom-license.service` on port 8220, tunnel rules in `scripts/cloudflared-ingress.yml`.
+
+Update:
+
+```sh
+./gradlew distTar
+scp web/build/distributions/web-1.0.0.tar root@axiom-dedi:/tmp/
+ssh root@axiom-dedi 'systemctl stop axiom-license && rm -rf /opt/axiom-license/web && tar -xf /tmp/web-1.0.0.tar -C /opt/axiom-license && mv /opt/axiom-license/web-1.0.0 /opt/axiom-license/web && chown -R axiom:axiom /opt/axiom-license && systemctl start axiom-license'
+```
