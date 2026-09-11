@@ -1,0 +1,12 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(':common')
+}
+
+application {
+    mainClass = 'com.github.axiomc.license.web.Application'
+    applicationDefaultJvmArgs = ['-XX:+UseZGC']
+}
