@@ -3,6 +3,7 @@ package com.github.axiomc.license.common.api;
 import com.github.axiomc.license.common.crypto.Envelope;
 import com.github.axiomc.license.common.crypto.ServerKeys;
 import com.github.axiomc.license.common.http.Http;
+import com.github.axiomc.license.common.http.RateLimiter;
 import com.github.axiomc.license.common.protocol.LicenseRequest;
 import com.github.axiomc.license.common.protocol.LicenseResponse;
 import com.sun.net.httpserver.HttpExchange;
@@ -15,6 +16,7 @@ public final class LicenseEndpoint implements HttpHandler {
     public static final String PATH = "/v1/license/verify";
 
     private static final int MAX_BODY = 1024;
+    private static final RateLimiter LIMITER = new RateLimiter(60, 60_000);
     private static final System.Logger LOG = System.getLogger(LicenseEndpoint.class.getName());
 
     private final LicenseService service;
@@ -29,6 +31,10 @@ public final class LicenseEndpoint implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         if (!Http.isPost(exchange)) {
             Http.empty(exchange, 405);
+            return;
+        }
+        if (!LIMITER.allow(Http.clientAddress(exchange))) {
+            Http.empty(exchange, 429);
             return;
         }
         try {
